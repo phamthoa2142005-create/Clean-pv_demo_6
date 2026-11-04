@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PV O&M Economic & Decision Monitor - TP.HCM</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; }
+    .card-clean { background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+    .pulse-dot { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+  </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+  <!-- Modal Đăng nhập / Đăng ký -->
+  <div id="authModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl p-6 md:p-8 max-w-md w-full shadow-xl border border-slate-200">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white mx-auto mb-3 shadow-md shadow-blue-500/20">
+          <i data-lucide="sun" class="w-6 h-6"></i>
+        </div>
+        <h2 class="text-xl font-bold text-slate-900" id="authTitle">Hệ Thống Quản Lý O&M Pin PV</h2>
+        <p class="text-xs text-slate-500 mt-1" id="authSubtitle">Đăng nhập để đồng bộ dự án qua cơ sở dữ liệu Supabase</p>
+      </div>
+
+      <div id="authAlert" class="hidden mb-4 p-3 rounded-lg text-xs font-medium border"></div>
+
+      <div class="space-y-4 text-xs">
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Email kỹ sư / Quản lý</label>
+          <input type="email" id="authEmail" placeholder="vd: engineer@student.hcmute.edu.vn" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Mật khẩu</label>
+          <input type="password" id="authPassword" placeholder="••••••••" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50">
+        </div>
+
+        <button id="authBtn" onclick="handleAuthAction()" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 font-semibold text-white rounded-lg transition-all shadow text-xs flex items-center justify-center gap-2">
+          <i data-lucide="log-in" class="w-4 h-4"></i> <span id="authBtnText">Đăng nhập</span>
+        </button>
+
+        <div class="text-center pt-2">
+          <button id="toggleAuthBtn" onclick="toggleAuthMode()" class="text-blue-600 hover:underline text-xs font-medium">
+            Chưa có tài khoản? Đăng ký ngay
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Thêm Dự Án Mới -->
+  <div id="newProjectModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl p-6 max-w-lg w-full shadow-xl border border-slate-200">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <i data-lucide="plus-circle" class="w-4 h-4 text-blue-600"></i> Thêm Dự Án Mới
+        </h3>
+        <button onclick="closeNewProjectModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-xs">
+        <div class="sm:col-span-2">
+          <label class="block font-medium text-slate-700 mb-1">Tên dự án</label>
+          <input type="text" id="mProjName" placeholder="VD: Hệ Thống Áp Mái KCN Hiệp Phước" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-50">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Vĩ độ (Lat)</label>
+          <input type="number" step="0.0001" id="mProjLat" value="10.7769" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-50">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Kinh độ (Lon)</label>
+          <input type="number" step="0.0001" id="mProjLon" value="106.7009" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-50">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Công suất P<sub>peak</sub> (kWp)</label>
+          <input type="number" step="0.01" id="mProjP" value="100.00" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-50">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Chi phí 1 lần rửa (VNĐ)</label>
+          <input type="number" step="1000" id="mProjC" value="2500000" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-50">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Đơn giá điện (VNĐ/kWh)</label>
+          <input type="number" step="0.01" id="mProjPrice" value="2000.00" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-50">
+        </div>
+        <div>
+          <label class="block font-medium text-slate-700 mb-1">Tốc độ bụi r (%/ngày)</label>
+          <input type="number" step="0.01" id="mProjR" value="0.15" class="w-full border border-slate-300 rounded-lg px-3 py-2 bg-slate-50">
+        </div>
+      </div>
+
+      <div class="mt-5 flex justify-end gap-2 text-xs">
+        <button onclick="closeNewProjectModal()" class="px-4 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50 font-medium">Hủy</button>
+        <button onclick="saveProjectToSupabase()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold shadow-sm flex items-center gap-1.5">
+          <i data-lucide="save" class="w-3.5 h-3.5"></i> Lưu dự án
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-200 gap-4">
+    <div>
+      <div class="flex items-center gap-3">
+        <span class="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-200">
+          <i data-lucide="badge-dollar-sign" class="w-6 h-6"></i>
+        </span>
+        <div>
+          <h1 class="text-xl md:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            PV O&M Economic & Decision Monitor <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 pulse-dot"></span> BẢN TỐI ƯU KINH TẾ</span>
+          </h1>
+          <p class="text-xs md:text-sm text-slate-500">Giám sát lượng mưa thực tế & So sánh hiệu quả tài chính O&M (Chiến lược đề xuất vs Định kỳ 90 ngày)</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Actions & Project Selector -->
+    <div class="flex flex-wrap items-center gap-2.5">
+      <div class="flex items-center bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs shadow-sm">
+        <i data-lucide="folder" class="w-4 h-4 text-slate-400 mr-1.5"></i>
+        <select id="projectSelector" onchange="switchProject(this.value)" class="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer pr-1">
+          <option value="">Đang nạp dự án...</option>
+        </select>
+        <button onclick="openNewProjectModal()" title="Thêm dự án mới" class="ml-2 text-blue-600 hover:text-blue-800">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="bg-slate-100 border border-slate-200 rounded-lg p-1 flex text-xs">
+        <button id="modeApiBtn" onclick="setDataSourceMode('api')" class="px-3 py-1.5 rounded-md font-medium bg-blue-600
